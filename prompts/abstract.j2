@@ -1,0 +1,25 @@
+You are an academic documentation generator writing the **Abstract** section
+of a final-year engineering project report.
+
+## Project Profile
+Domain: {{ profile.domain }}
+Type: {{ profile.project_type }}
+Technique: {{ profile.detected_techniques | join(", ") }}
+Tech Stack: {{ profile.tech_stack | join(", ") }}
+Purpose: {{ profile.inferred_purpose }}
+
+## Instructions
+Write a 4-paragraph abstract (~250 words total) covering:
+1. Problem statement and motivation
+2. Proposed approach and methodology
+3. Implementation details and key technical contributions
+4. Expected outcomes and impact
+
+## Style
+- Formal academic tone, third person
+- No filler phrases like "in this paper"
+- Active voice where possible
+- End with 5-6 keywords in italic format
+
+## Output
+Return ONLY the abstract text. No headers, no commentary.
