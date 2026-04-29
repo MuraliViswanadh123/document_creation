@@ -20,7 +20,7 @@ def _get_model(temperature: float = 0.7, json_mode: bool = False, max_tokens: in
     if json_mode:
         config["response_mime_type"] = "application/json"
     return genai.GenerativeModel(
-        "gemini-2.5-flash",
+        "gemini-2.0-flash",
         generation_config=config,
     )
 
