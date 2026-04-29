@@ -8,6 +8,7 @@ import time
 import zipfile
 import io
 import os
+import re
 from datetime import datetime
 
 from pipeline import gemini_client, parser, diagram_generator, docx_builder
@@ -60,7 +61,6 @@ def extract_zip(uploaded_file) -> dict:
         for name in z.namelist():
             if name.endswith("/"):
                 continue
-            # Skip common junk
             if "__MACOSX" in name or name.startswith("."):
                 continue
             try:
@@ -77,11 +77,47 @@ def read_pdf(pdf_file) -> str:
         pdf_file.seek(0)
         reader = PdfReader(pdf_file)
         text = ""
-        for page in reader.pages[:10]:  # first 10 pages only
+        for page in reader.pages[:20]:
             text += page.extract_text() + "\n"
         return text
     except Exception as e:
         return f"(PDF read failed: {e})"
+
+
+def read_docx(docx_file) -> str:
+    """Extract text from a DOCX file."""
+    try:
+        from docx import Document
+        docx_file.seek(0)
+        doc = Document(docx_file)
+        text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+        return text
+    except Exception as e:
+        return f"(DOCX read failed: {e})"
+
+
+def read_text_file(txt_file) -> str:
+    """Read a plain text file."""
+    try:
+        txt_file.seek(0)
+        return txt_file.read().decode("utf-8", errors="ignore")
+    except Exception as e:
+        return f"(Text file read failed: {e})"
+
+
+def read_abstract_file(abstract_file) -> str:
+    """Auto-detect format and read abstract from uploaded file."""
+    if abstract_file is None:
+        return ""
+    name = abstract_file.name.lower()
+    if name.endswith(".pdf"):
+        return read_pdf(abstract_file)
+    elif name.endswith(".docx"):
+        return read_docx(abstract_file)
+    elif name.endswith((".txt", ".md")):
+        return read_text_file(abstract_file)
+    else:
+        return f"(Unsupported file type: {abstract_file.name})"
 
 
 def plan_document(profile: dict) -> list:
@@ -105,9 +141,10 @@ def plan_document(profile: dict) -> list:
         "References",
     ]
     project_type = profile.get("project_type", "").lower()
+    domain = profile.get("domain", "").lower()
     if "web" in project_type or "mobile" in project_type or "desktop" in project_type:
         spine.insert(9, "UI Requirements")
-    if "ml" in project_type or "ai" in project_type or "vision" in project_type.lower() or "ml" in profile.get("domain", "").lower():
+    if "ml" in project_type or "ai" in project_type or "vision" in domain or "ml" in domain:
         spine.insert(11, "Model Architecture")
     return spine
 
@@ -115,13 +152,12 @@ def plan_document(profile: dict) -> list:
 # ============================================================
 # MAIN PIPELINE
 # ============================================================
-def run_pipeline(code_file, abstract: str, paper_file, settings: dict):
+def run_pipeline(code_file, abstract_text: str, paper_file, settings: dict):
     """Orchestrate the full generation pipeline."""
     start_time = time.time()
     
     with st.status("Generating documentation...", expanded=True) as status:
         try:
-            # Stage 1: Extract code
             st.write("📂 Extracting source code archive...")
             files = extract_zip(code_file)
             st.write(f"   Found {len(files)} files")
@@ -129,32 +165,30 @@ def run_pipeline(code_file, abstract: str, paper_file, settings: dict):
                 st.error("No files found in ZIP. Check the archive.")
                 return
 
-            # Stage 2: Parse
             st.write("🔍 Parsing code structure...")
             structure = parser.parse_codebase(files)
             st.write(f"   Languages: {', '.join(structure['languages'])}")
             st.write(f"   {len(structure['classes'])} classes, {len(structure['functions'])} functions, {len(structure['imports'])} imports")
 
-            # Stage 3: Read paper
             paper_text = ""
             if paper_file is not None:
                 st.write("📑 Reading base paper...")
                 paper_text = read_pdf(paper_file)
 
-            # Stage 4: Project understanding
+            if abstract_text:
+                st.write(f"📝 Using abstract ({len(abstract_text)} chars)")
+
             st.write("🧠 Analyzing project (Gemini)...")
-            profile = gemini_client.analyze_project(structure, abstract, paper_text)
+            profile = gemini_client.analyze_project(structure, abstract_text, paper_text)
             st.session_state.project_profile = profile
             st.write(f"   Title: **{profile.get('title')}**")
             st.write(f"   Domain: {profile.get('domain')}")
             st.write(f"   Type: {profile.get('project_type')}")
 
-            # Stage 5: Plan
             st.write("📋 Planning document structure...")
             section_plan = plan_document(profile)
-            st.write(f"   Will generate {len(section_plan)} sections")
+            st.write(f"   Will generate {len(section_plan)} sections (targeting 60-70 pages)")
 
-            # Stage 6: Sections
             st.write(f"✍️ Generating {len(section_plan)} sections (Gemini)...")
             progress = st.progress(0, text="Starting...")
             sections = []
@@ -166,12 +200,12 @@ def run_pipeline(code_file, abstract: str, paper_file, settings: dict):
                 try:
                     section = gemini_client.generate_section(section_name, profile, structure)
                     sections.append(section)
+                    st.write(f"   ✓ {section_name}: {section['word_count']} words")
                 except Exception as e:
                     st.warning(f"   ⚠️ {section_name} failed: {e}")
                     sections.append({"name": section_name, "content": f"_Generation failed: {e}_", "word_count": 0})
             st.session_state.sections = sections
 
-            # Stage 7: Diagrams
             diagrams = []
             if settings.get("include_diagrams", True):
                 st.write("📊 Generating UML diagrams...")
@@ -180,32 +214,34 @@ def run_pipeline(code_file, abstract: str, paper_file, settings: dict):
                 st.write(f"   {rendered}/{len(diagrams)} diagrams rendered successfully")
                 st.session_state.diagrams = diagrams
 
-            # Stage 8: Assemble
             st.write("📄 Assembling DOCX...")
             docx_bytes = docx_builder.assemble_docx(sections, diagrams, profile)
             st.session_state.generated_docx = docx_bytes
             
-            # Generate filename from project title
             title_slug = re.sub(r"[^\w\s-]", "", profile.get("title", "documentation")).strip().replace(" ", "_")
             st.session_state.generated_filename = f"{title_slug}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
 
             elapsed = time.time() - start_time
+            total_words = sum(s["word_count"] for s in sections)
             st.session_state.stats = {
                 "elapsed_seconds": elapsed,
                 "section_count": len(sections),
                 "diagram_count": len([d for d in diagrams if d.get("image_bytes")]),
-                "word_count": sum(s["word_count"] for s in sections),
+                "word_count": total_words,
+                "estimated_pages": max(1, total_words // 280),
             }
             st.session_state.generation_complete = True
 
-            status.update(label=f"✅ Documentation ready in {elapsed:.1f}s", state="complete", expanded=False)
+            status.update(
+                label=f"✅ Documentation ready in {elapsed:.1f}s — ~{st.session_state.stats['estimated_pages']} pages",
+                state="complete",
+                expanded=False,
+            )
 
         except Exception as e:
             status.update(label="❌ Generation failed", state="error")
             st.exception(e)
 
-
-import re  # for filename slug
 
 # ============================================================
 # UI: SIDEBAR
@@ -213,9 +249,43 @@ import re  # for filename slug
 with st.sidebar:
     st.title("📥 Project Inputs")
     
-    code_file = st.file_uploader("Source Code (ZIP) *", type=["zip"])
-    abstract = st.text_area("Abstract (optional)", height=120, placeholder="Paste abstract if available...")
-    paper_file = st.file_uploader("Base Paper (optional)", type=["pdf"])
+    code_file = st.file_uploader(
+        "Source Code (ZIP) *",
+        type=["zip"],
+        help="Upload your project as a ZIP archive (required)",
+    )
+    
+    st.divider()
+    st.subheader("📝 Abstract")
+    st.caption("Provide as text OR upload a file (or both — file takes priority)")
+    
+    abstract_text_input = st.text_area(
+        "Type/paste abstract",
+        height=120,
+        placeholder="Paste abstract here, or use the file upload below...",
+    )
+    
+    abstract_file = st.file_uploader(
+        "Or upload abstract file",
+        type=["txt", "md", "docx", "pdf"],
+        help="Supported formats: .txt, .md, .docx, .pdf",
+    )
+    
+    final_abstract = ""
+    if abstract_file is not None:
+        final_abstract = read_abstract_file(abstract_file)
+        st.caption(f"📄 Using uploaded file: **{abstract_file.name}**")
+    elif abstract_text_input.strip():
+        final_abstract = abstract_text_input.strip()
+        st.caption("✏️ Using text input")
+    
+    st.divider()
+    st.subheader("📑 Base Paper (optional)")
+    paper_file = st.file_uploader(
+        "Upload reference paper",
+        type=["pdf"],
+        help="Used to enrich literature review",
+    )
     
     st.divider()
     st.subheader("⚙️ Settings")
@@ -242,29 +312,29 @@ with st.sidebar:
 # UI: MAIN
 # ============================================================
 st.title("📄 AutoDocs")
-st.caption("Generate complete academic documentation from your source code using AI")
+st.caption("Generate complete 60-70 page academic documentation from your source code using AI")
 
 if code_file is None and not st.session_state.generation_complete:
     col1, col2, col3 = st.columns(3)
     col1.info("**1. Upload code**\n\nDrop your project ZIP in the sidebar.")
-    col2.info("**2. Configure**\n\nOptional: add abstract, base paper.")
-    col3.info("**3. Generate**\n\nClick the button. Takes 3-6 minutes.")
+    col2.info("**2. Add abstract**\n\nType it OR upload as .txt/.docx/.pdf (optional).")
+    col3.info("**3. Generate**\n\nClick the button. Targets 60-70 pages output.")
 
 elif generate_clicked and code_file is not None and api_key:
     settings = {"include_diagrams": include_diagrams}
-    run_pipeline(code_file, abstract, paper_file, settings)
+    run_pipeline(code_file, final_abstract, paper_file, settings)
     st.rerun()
 
-# Results
 if st.session_state.generation_complete:
     st.success("🎉 Documentation generated successfully!")
     
     stats = st.session_state.stats
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Time", f"{stats['elapsed_seconds']:.1f}s")
-    c2.metric("Sections", stats["section_count"])
-    c3.metric("Diagrams", stats["diagram_count"])
-    c4.metric("Words", f"{stats['word_count']:,}")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Time", f"{stats['elapsed_seconds']:.0f}s")
+    c2.metric("Pages (est.)", stats.get("estimated_pages", "—"))
+    c3.metric("Sections", stats["section_count"])
+    c4.metric("Diagrams", stats["diagram_count"])
+    c5.metric("Words", f"{stats['word_count']:,}")
     
     st.download_button(
         label="⬇️ Download DOCX Report",
