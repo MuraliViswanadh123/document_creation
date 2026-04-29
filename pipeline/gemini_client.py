@@ -81,7 +81,7 @@ Return ONLY valid JSON. No markdown fences, no commentary."""
 
 
 # ============================================================
-# 2. SECTION GENERATION — LONGER, MORE DETAILED
+# 2. SECTION GENERATION — LONGER, MORE DETAILED, WITH FEASIBILITY
 # ============================================================
 SECTION_PROMPTS = {
     "Abstract": """Write a substantive 4-5 paragraph academic abstract (~350-400 words):
@@ -104,49 +104,127 @@ Each paragraph should be substantive (8-12 sentences), with specific technical d
 
     "Problem Statement": """Write a comprehensive Problem Statement (~600-800 words, 4-5 paragraphs):
 Para 1: Set the broader context and why this domain matters
-Para 2: Identify the specific problem with concrete examples and statistics where applicable
+Para 2: Identify the specific problem with concrete examples
 Para 3: Detail why existing solutions are inadequate (3-5 specific limitations)
 Para 4: Articulate the scope and constraints of this project
-Para 5: Define the research questions or technical challenges being addressed
-Be specific, technical, and grounded in the project's domain.""",
+Para 5: Define the research questions or technical challenges being addressed""",
 
     "Objectives": """Write 8-10 detailed objectives. Each objective:
-- Starts with a strong action verb (Design, Develop, Implement, Evaluate, Validate, Optimize, Integrate, Analyze, Demonstrate, Establish)
+- Starts with a strong action verb (Design, Develop, Implement, Evaluate, etc.)
 - Has a clear deliverable
 - Spans 2-3 sentences explaining what will be achieved and why
-- Uses **bold** for the action verb
-Format as a markdown bulleted list with substantive content.""",
+- Uses **bold** for the action verb""",
 
     "Literature Review": """Write a comprehensive Literature Review section (~1800-2200 words):
 
-Start with a 1-paragraph introduction to the section.
+Start with a 1-paragraph introduction.
 
-Then cover 8-10 related works in detail. For EACH work, write a full paragraph (6-8 sentences) covering:
+Then cover 8-10 related works in detail. For EACH work, write a full paragraph (6-8 sentences):
 - Authors and year in [Author et al., Year] format
-- The technique/approach used
-- The dataset, scope, or application context
-- Key contribution and findings
-- Specific limitations or gaps
-- How it relates to or differs from this project
+- Technique/approach used
+- Dataset, scope, or application context
+- Key contribution
+- Specific limitations
+- Relation to this project
 
-Group works thematically (e.g., "Foundational approaches", "Recent advances", "Domain-specific applications").
+Group thematically (e.g., "Foundational approaches", "Recent advances").
 
-End with a comprehensive 2-3 paragraph comparative analysis showing:
-- How the proposed work builds upon or differs from prior art
-- Gaps in existing literature this project addresses
-- Positioning relative to state-of-the-art
+End with a 2-3 paragraph comparative analysis.""",
 
-Use specific, plausible academic citations throughout.""",
+    "Feasibility Study": """Write a comprehensive Feasibility Study section (~1500-1800 words) covering 5 dimensions of feasibility.
+
+Open with a 2-paragraph introduction explaining the importance of feasibility analysis in this project context.
+
+Then provide 5 detailed sub-sections with ### headings:
+
+### Technical Feasibility (~350 words)
+Analyze whether the project is technically achievable:
+- Availability of required technologies and tools
+- Maturity of the chosen tech stack ({tech_stack})
+- Compatibility of components
+- Required technical expertise and skills
+- Hardware/software requirements
+- Integration complexity
+Conclude with a feasibility verdict.
+
+### Economic Feasibility (~350 words)
+Analyze whether the project is financially viable:
+- Development costs (tools, licenses, infrastructure)
+- Operational costs (hosting, maintenance, third-party services)
+- Cost-benefit analysis
+- Return on investment potential
+- Free/open-source alternatives leveraged
+- Long-term financial sustainability
+Conclude with a feasibility verdict.
+
+### Operational Feasibility (~300 words)
+Analyze whether the system can be operated effectively:
+- User acceptance and adoption likelihood
+- Training requirements for users
+- Integration with existing workflows
+- Operational support requirements
+- Scalability of operations
+Conclude with a feasibility verdict.
+
+### Schedule Feasibility (~250 words)
+Analyze whether the project can be completed within timeline:
+- Major project phases and milestones
+- Estimated time for each phase
+- Critical path and dependencies
+- Risk factors that could delay
+- Resource availability
+Conclude with a feasibility verdict.
+
+### Legal and Ethical Feasibility (~250 words)
+Analyze legal and ethical considerations:
+- Data privacy and protection (GDPR, etc.)
+- Licensing of dependencies
+- Intellectual property considerations
+- Ethical implications of the system
+- Compliance requirements
+Conclude with a feasibility verdict.
+
+End with a 2-paragraph overall feasibility conclusion summarizing all dimensions.""",
+
+    "Limitations": """Write a comprehensive Limitations section (~1200-1500 words) covering project constraints and limitations.
+
+Open with a 2-paragraph introduction explaining the importance of acknowledging limitations transparently.
+
+Then provide 6-8 detailed sub-sections with ### headings, each 150-200 words:
+
+### Technical Limitations
+Inherent technical constraints (performance bounds, accuracy limits, technology gaps).
+
+### Scope Limitations
+What this project does NOT cover, intentional exclusions, boundary conditions.
+
+### Data Limitations
+Constraints on data availability, quality, volume, or representativeness.
+
+### Scalability Limitations
+Bounds on concurrent users, data volume, geographic reach, growth capacity.
+
+### Performance Limitations
+Latency, throughput, resource consumption constraints under specific conditions.
+
+### Security Limitations
+Known security boundaries, threat models not fully addressed, trust assumptions.
+
+### Usability Limitations
+User experience constraints, accessibility gaps, learning curve issues.
+
+### Deployment Limitations
+Infrastructure dependencies, platform restrictions, environmental requirements.
+
+End with a 2-paragraph honest reflection on how these limitations affect the project's value and how future work can address them.""",
 
     "Existing System": """Write a detailed Existing System section (~800-1000 words, 5-6 paragraphs):
 
-Para 1: Overview of how this problem is currently addressed in industry/academia
-Para 2-3: Detailed description of 2-3 representative existing approaches (architecture, methodology, technology stack)
-Para 4: Analysis of limitations — be specific (performance bottlenecks, scalability issues, accuracy gaps, usability problems, security concerns)
+Para 1: Overview of how this problem is currently addressed
+Para 2-3: Detailed description of 2-3 representative existing approaches
+Para 4: Analysis of limitations — be specific (performance, scalability, accuracy, usability, security)
 Para 5: Discussion of why these limitations matter for stakeholders
-Para 6: Summary of the gap that motivates the proposed system
-
-Use specific technical details, mention real systems/tools where applicable, and quantify limitations when possible.""",
+Para 6: Summary of the gap that motivates the proposed system""",
 
     "Proposed System": """Write a comprehensive Proposed System section (~1000-1200 words, 6-7 paragraphs):
 
@@ -156,50 +234,46 @@ Para 3: Key innovations and novel aspects
 Para 4: Detailed component breakdown
 Para 5: Comparison with existing systems (specific advantages)
 Para 6: Expected benefits (technical, operational, user-facing)
-Para 7: Scalability and extensibility considerations
-
-Include specific technologies, algorithms, and architectural decisions. Reference the actual tech stack of this project.""",
+Para 7: Scalability and extensibility considerations""",
 
     "System Architecture": """Write a detailed System Architecture section (~1200-1500 words):
 
 Start with 2 paragraphs of architectural overview describing:
 - The overall pattern (layered, microservices, MVC, pipeline, etc.)
-- High-level data flow from input to output
+- High-level data flow
 
-Then describe 6-8 numbered components in depth. For EACH component, write 2-3 paragraphs covering:
+Describe 6-8 numbered components in depth. For EACH, write 2-3 paragraphs covering:
 - Component name and primary responsibility
 - Technology/framework used
-- Inputs accepted and outputs produced
+- Inputs and outputs
 - Internal logic and key algorithms
-- How it interacts with other components
+- Interactions with other components
 - Performance and reliability considerations
 
-End with 2 paragraphs on:
-- Cross-cutting concerns (logging, error handling, security)
-- Deployment topology
+End with 2 paragraphs on cross-cutting concerns and deployment topology.
 
 Reference actual classes/modules from the codebase.""",
 
     "Methodology": """Write a comprehensive Methodology section (~1200-1500 words) as 10-12 numbered steps.
 
-For EACH step, write 3-4 sentences covering:
-- The action being performed (clear title in **bold**)
-- The technical approach used
-- Inputs required and outputs produced
-- How it connects to subsequent steps
-- Any algorithms, formulas, or design patterns applied
+For EACH step (3-4 sentences):
+- Action being performed (clear title in **bold**)
+- Technical approach used
+- Inputs and outputs
+- Connection to subsequent steps
+- Algorithms/patterns applied
 
-Start with an introductory paragraph (4-5 sentences) explaining the overall methodology approach.
-End with a paragraph on validation strategy and quality assurance.
-
-Cover the full workflow from data input through processing, storage, computation, and output.""",
+Start with introductory paragraph explaining the overall methodology.
+End with paragraph on validation strategy.""",
 
     "Functional Requirements": """Write 7-9 detailed functional requirement sub-sections.
 
+Open with a 2-paragraph introduction explaining the functional scope of the system.
+
 For EACH sub-section:
-- Use ### heading with descriptive name (e.g. "User Interface and Interaction", "Data Processing Pipeline", "Result Visualization")
-- Start with 2-3 sentence introduction explaining the scope
-- Provide 7-10 specific bullet points, each 1-2 sentences with concrete details
+- Use ### heading with descriptive name
+- Start with 2-3 sentence introduction
+- Provide 7-10 specific bullet points with concrete details
 
 Cover (adapting names to project context):
 - User Interface and Interaction
@@ -212,14 +286,16 @@ Cover (adapting names to project context):
 - Reporting (if applicable)
 - Administrative Features
 
-Ground each requirement in the actual code structure and project context. Total ~1500-1800 words.""",
+Ground each requirement in the actual code structure. Total ~1800-2200 words.""",
 
     "Non-Functional Requirements": """Write 8-10 detailed non-functional requirement sub-sections.
 
+Open with a 2-paragraph introduction explaining the importance of NFRs for system quality.
+
 For EACH:
-- Use ### heading
-- Open with 2-3 sentence introduction explaining why this NFR matters for this project
-- Provide 6-8 specific, measurable bullet points with quantitative targets where possible
+- ### heading
+- 2-3 sentence introduction explaining why this NFR matters
+- 6-8 specific, measurable bullet points with quantitative targets
 
 Cover:
 - Performance (response times, throughput targets)
@@ -233,122 +309,101 @@ Cover:
 - Auditability and Logging
 - Resource Efficiency
 
-Total ~1500-1800 words. Include specific metrics where possible.""",
+Total ~1800-2200 words.""",
 
     "Implementation": """Write a comprehensive Implementation section (~2000-2500 words) covering:
 
 ### Development Environment (~300 words)
-- Hardware specifications (typical dev machine)
+- Hardware specifications
 - Operating systems supported
-- Software prerequisites with version numbers
-- IDE/tooling recommendations
+- Software prerequisites with versions
+- IDE/tooling
 - Setup procedure
 
 ### Core Implementation Approach (~500 words)
-- Programming paradigm chosen
+- Programming paradigm
 - Architectural decisions and rationale
-- Key design patterns applied
+- Design patterns
 - Dependency management
-- Code organization (folder structure)
+- Code organization
 
 ### Detailed Module Implementation (~800 words)
-For 4-6 key modules/components, describe:
+For 4-6 key modules:
 - Purpose and responsibility
 - Implementation approach
-- Key classes/functions (use real names from codebase)
-- Algorithms and data structures used
+- Key classes/functions (use real names)
+- Algorithms and data structures
 - Integration points
 
 ### Technical Decisions (~400 words)
 - Library/framework choices and tradeoffs
 - Algorithm selection rationale
-- Performance optimizations applied
-- Security considerations implemented
+- Performance optimizations
+- Security considerations
 
 ### Integration and Workflow (~400 words)
-- How components connect end-to-end
-- Data flow through the system
-- Error handling strategy
-- Logging and monitoring approach
+- How components connect
+- Data flow
+- Error handling
+- Logging and monitoring""",
 
-Use technical detail consistent with the project's actual tech stack and code structure.""",
+    "Testing": """Write a comprehensive Testing section (~1200-1500 words).
 
-    "Testing": """Write a comprehensive Testing section (~1200-1500 words) describing the testing approach.
+Start with 2-paragraph introduction.
 
-Start with a 2-paragraph introduction to the testing philosophy and methodology.
-
-Then cover 4-5 testing categories with ### sub-headings:
+Cover 5 testing categories with ### sub-headings:
 
 ### Functional Testing (~300 words)
-- Methodology
-- Test case categories (5-7 specific scenarios)
-- Tools and frameworks used
-- Outcomes and findings
+Methodology, test cases, tools, outcomes.
 
 ### Performance Testing (~250 words)
-- Performance metrics measured
-- Test scenarios and load profiles
-- Benchmarking methodology
-- Results summary
+Metrics, scenarios, benchmarking, results.
 
 ### Integration Testing (~250 words)
-- Integration points tested
-- Test approach
-- Issues discovered and resolved
+Integration points, approach, issues found.
 
 ### Validation/Acceptance Testing (~250 words)
-- Validation criteria
-- Test methodology
-- User acceptance scenarios
+Validation criteria, methodology, scenarios.
 
 ### Security Testing (~200 words)
-- Security aspects evaluated
-- Vulnerabilities checked
-- Mitigations applied
+Aspects evaluated, vulnerabilities checked, mitigations.
 
-End with a 2-paragraph summary of overall testing outcomes and quality assurance.""",
+End with 2-paragraph summary of overall testing outcomes.""",
 
     "Conclusion": """Write a comprehensive Conclusion (~700-900 words, 5-6 paragraphs):
-
-Para 1: Restate the problem and motivation (briefly)
+Para 1: Restate problem and motivation
 Para 2: Summarize what was built and the technical approach
-Para 3: Highlight key contributions and achievements
-Para 4: Discuss findings, results, and validation outcomes
-Para 5: Reflect on the project's significance and broader implications
-Para 6: Final thoughts on the value delivered and lessons learned
+Para 3: Highlight key contributions
+Para 4: Discuss findings and validation outcomes
+Para 5: Reflect on the project's significance
+Para 6: Final thoughts and lessons learned""",
 
-Be specific to this project, avoid generic conclusions.""",
+    "Future Scope": """Write 12-15 detailed Future Scope items.
 
-    "Future Scope": """Write 12-15 detailed Future Scope items covering enhancements and extensions.
-
-For EACH item:
-- Use **bold heading** describing the enhancement
-- Write 2-4 sentences explaining:
-  * What the enhancement involves technically
-  * Why it would be valuable
-  * Expected benefit or impact
-  * Any prerequisites or dependencies
+For EACH:
+- **Bold heading** describing the enhancement
+- 2-4 sentences explaining what, why, expected benefit, prerequisites
 
 Cover diverse categories:
 - Algorithm/model improvements
-- Architecture and scalability enhancements
+- Architecture and scalability
 - New features and functionality
 - Integration with external systems
 - Performance optimizations
-- Security and privacy enhancements
-- User experience improvements
-- Deployment and operational improvements
-- Advanced analytics or reporting
+- Security enhancements
+- UX improvements
+- Deployment improvements
+- Advanced analytics
 - Multi-platform support
 - Internationalization
 - Mobile/edge deployment
 
-Total ~1500-1800 words. Be specific to the project's domain.""",
+Total ~1500-1800 words.""",
 
-    "References": """Generate 15-20 plausible IEEE-format references relevant to this project's domain, techniques, and tech stack.
+    "References": """Generate 15-20 plausible IEEE-format references.
 
 Format strictly as IEEE:
-[N] A. Author, B. Author, and C. Author, "Title of paper," *Journal/Conference Name*, vol. X, no. Y, pp. ZZ-ZZ, Month Year.
+[N] A. Author, B. Author, and C. Author, "Title of paper," *Journal/Conference*, vol. X, no. Y, pp. ZZ-ZZ, Month Year.
 
 For books:
 [N] A. Author, *Book Title*, Edition. Publisher, Year.
@@ -356,79 +411,26 @@ For books:
 For online resources:
 [N] A. Author, "Title," Source, Year. [Online]. Available: URL
 
-Mix: 60% journal/conference papers, 25% books, 15% technical reports/online resources.
-Use real, well-known papers and authors in the domain when possible.
-Cover both foundational works and recent advances (2020-2024).""",
+Mix: 60% papers, 25% books, 15% technical reports/online.
+Use real, well-known papers and authors when possible.
+Cover both foundational and recent works (2020-2024).""",
 
     "UI Requirements": """Write a comprehensive UI Requirements section (~1000-1200 words):
 
 ### Layout and Navigation (~250 words)
-- Overall layout structure
-- Navigation patterns
-- Information hierarchy
-- Responsive design considerations
-
-### Key Screens (~400 words)
-Detail 5-7 main screens with:
-- Screen purpose
-- Key UI elements
-- User interactions
-- Data displayed
-
+### Key Screens (~400 words) - detail 5-7 main screens
 ### User Interactions (~250 words)
-- Input methods
-- Feedback mechanisms
-- Loading states and progress indicators
-- Error displays
-
 ### Accessibility (~200 words)
-- WCAG compliance considerations
-- Keyboard navigation
-- Screen reader support
-- Color contrast and visual design
+### Visual Design (~150 words)""",
 
-### Visual Design (~150 words)
-- Design system or style guide
-- Typography
-- Color palette
-- Iconography""",
-
-    "Model Architecture": """Write a comprehensive Model Architecture section (~1500-1800 words) covering:
+    "Model Architecture": """Write a comprehensive Model Architecture section (~1500-1800 words):
 
 ### Overview (~200 words)
-- Type of model
-- High-level architecture
-- Theoretical foundation
-
 ### Input Pipeline (~250 words)
-- Input format and dimensions
-- Preprocessing steps
-- Augmentation (if applicable)
-- Batching strategy
-
-### Network Architecture (~500 words)
-Layer-by-layer description:
-- Layer types and configurations
-- Activation functions
-- Skip connections, attention, etc.
-- Parameter counts
-
+### Network Architecture (~500 words) - layer-by-layer
 ### Output and Loss (~300 words)
-- Output format
-- Loss function with mathematical formulation
-- Loss components if multi-task
-
 ### Training Procedure (~400 words)
-- Optimizer choice and hyperparameters
-- Learning rate schedule
-- Regularization techniques
-- Hardware and training time
-- Convergence criteria
-
-### Evaluation Metrics (~200 words)
-- Primary metrics with formulas
-- Secondary metrics
-- Validation strategy""",
+### Evaluation Metrics (~200 words)""",
 }
 
 
@@ -438,6 +440,9 @@ def generate_section(section_name: str, profile: dict, structure: dict) -> dict:
         section_name,
         f"Write a comprehensive {section_name} section (~800-1000 words) appropriate for an academic project report."
     )
+    
+    # Substitute project context into prompts that need it (e.g. Feasibility uses tech_stack)
+    instructions = instructions.replace("{tech_stack}", ", ".join(profile.get("tech_stack", [])))
 
     prompt = f"""You are writing the **{section_name}** section of an academic engineering project report.
 This is a substantial 60-70 page report. Each section should be detailed and substantive.
@@ -458,11 +463,11 @@ This is a substantial 60-70 page report. Each section should be detailed and sub
 ## Writing Guidelines
 - Formal academic tone, third person throughout
 - Specific to THIS project — use the context above, avoid generic boilerplate
-- Substantive paragraphs (8-12 sentences each, not 2-3)
+- Substantive paragraphs (8-12 sentences each)
 - Use technical terminology appropriate to the domain
-- Reference actual code elements (classes, functions, modules) from the structure when relevant
+- Reference actual code elements when relevant
 - Include specific examples, metrics, and concrete details
-- No filler phrases like "in this paper" or "we will discuss" — be direct
+- No filler phrases — be direct
 - Output in clean markdown format
 
 Generate the section content now. Aim for the target word count specified in the section instructions:"""
@@ -478,12 +483,135 @@ Generate the section content now. Aim for the target word count specified in the
 
 
 # ============================================================
-# 3. PLANTUML GENERATION
+# 3. PLANTUML GENERATION — IMPROVED PROMPTS
 # ============================================================
+
+DIAGRAM_SPECIFIC_INSTRUCTIONS = {
+    "Use Case Diagram": """Create a Use Case Diagram with:
+- 2-3 actors (e.g., User, Admin, System)
+- 6-10 use cases relevant to the project's main features
+- Use 'actor', 'usecase', and arrows
+Example structure:
+@startuml
+left to right direction
+actor User
+actor Admin
+rectangle System {
+  usecase "Login" as UC1
+  usecase "View Data" as UC2
+  User --> UC1
+  User --> UC2
+  Admin --> UC1
+}
+@enduml""",
+
+    "Class Diagram": """Create a Class Diagram with:
+- 5-8 main classes from the codebase
+- Their key attributes and methods
+- Inheritance, association, composition relationships
+Example structure:
+@startuml
+class User {
+  -id: int
+  -name: string
+  +login()
+  +logout()
+}
+class Admin extends User {
+  +manageUsers()
+}
+User --> Database
+@enduml""",
+
+    "Sequence Diagram": """Create a Sequence Diagram showing one key user flow:
+- 3-5 participants (user, controllers, services, database)
+- 8-12 numbered messages between them
+- Use ->, -->, activation boxes
+Example structure:
+@startuml
+actor User
+participant "Web UI" as UI
+participant "Controller" as C
+database DB
+User -> UI: Submit Form
+UI -> C: Process
+C -> DB: Query
+DB --> C: Result
+C --> UI: Response
+UI --> User: Display
+@enduml""",
+
+    "Activity Diagram": """Create an Activity Diagram showing the main workflow:
+- Start node, end node
+- 6-10 activities
+- 1-2 decision points (if/else)
+- Clear flow from start to finish
+Example structure:
+@startuml
+start
+:User submits input;
+:Validate input;
+if (Valid?) then (yes)
+  :Process data;
+  :Save result;
+else (no)
+  :Show error;
+endif
+:Return response;
+stop
+@enduml""",
+
+    "Component Diagram": """Create a Component Diagram showing system modules:
+- 5-8 components
+- Their interfaces (provided/required)
+- Dependencies between components
+Example structure:
+@startuml
+package "Frontend" {
+  [Web UI]
+}
+package "Backend" {
+  [API]
+  [Service]
+}
+database "Database" as DB
+[Web UI] --> [API]
+[API] --> [Service]
+[Service] --> DB
+@enduml""",
+
+    "Deployment Diagram": """Create a Deployment Diagram showing infrastructure:
+- 3-5 nodes (server, database, client)
+- Components deployed on each node
+- Network connections
+Example structure:
+@startuml
+node "Client Device" {
+  [Web Browser]
+}
+node "Application Server" {
+  [Web App]
+  [API Server]
+}
+database "Database Server" {
+  [PostgreSQL]
+}
+[Web Browser] --> [Web App]
+[Web App] --> [API Server]
+[API Server] --> [PostgreSQL]
+@enduml""",
+}
+
+
 def generate_plantuml(diagram_type: str, structure: dict, profile: dict) -> str:
     """Generate PlantUML code for a specific diagram type."""
-    classes_summary = json.dumps(structure.get("classes", [])[:20], indent=2)[:1500]
-    functions_summary = json.dumps(structure.get("functions", [])[:20], indent=2)[:1000]
+    classes_summary = json.dumps(structure.get("classes", [])[:15], indent=2)[:1200]
+    functions_summary = json.dumps(structure.get("functions", [])[:15], indent=2)[:800]
+    
+    specific_instructions = DIAGRAM_SPECIFIC_INSTRUCTIONS.get(
+        diagram_type,
+        "Create a clean, valid PlantUML diagram."
+    )
 
     prompt = f"""Generate a {diagram_type} for this project as PlantUML code.
 
@@ -497,28 +625,40 @@ def generate_plantuml(diagram_type: str, structure: dict, profile: dict) -> str:
 Classes: {classes_summary}
 Functions: {functions_summary}
 
-## Requirements
-- Output ONLY PlantUML code from @startuml to @enduml
-- No markdown fences, no commentary
-- Use real class/function names from above when relevant
-- Keep visually clean — 5-10 main elements
+## Specific Instructions for {diagram_type}
+{specific_instructions}
 
-Generate the PlantUML code:"""
+## CRITICAL Requirements
+- Output ONLY valid PlantUML code from @startuml to @enduml
+- NO markdown fences (no ```)
+- NO commentary or explanation before or after
+- Use real names from the code structure when relevant
+- Keep it visually clean and uncluttered (5-10 main elements)
+- Make sure the syntax is valid PlantUML
+
+Output the PlantUML code now:"""
 
     model = _get_model(temperature=0.4, max_tokens=2048)
     response = model.generate_content(prompt)
     code = response.text.strip()
 
+    # Clean up markdown fences if present
     if code.startswith("```"):
         lines = code.split("\n")
-        if lines[-1].startswith("```"):
-            lines = lines[1:-1]
-        else:
+        if lines and lines[0].startswith("```"):
             lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
         code = "\n".join(lines)
+    
+    code = code.strip()
 
+    # Ensure proper start/end tags
     if "@startuml" not in code:
         code = f"@startuml\n{code}\n@enduml"
+    elif "@enduml" not in code:
+        code = f"{code}\n@enduml"
+    
     return code
 
 

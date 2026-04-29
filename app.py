@@ -71,7 +71,6 @@ def extract_zip(uploaded_file) -> dict:
 
 
 def read_pdf(pdf_file) -> str:
-    """Extract text from a PDF file."""
     try:
         from pypdf import PdfReader
         pdf_file.seek(0)
@@ -85,19 +84,16 @@ def read_pdf(pdf_file) -> str:
 
 
 def read_docx(docx_file) -> str:
-    """Extract text from a DOCX file."""
     try:
         from docx import Document
         docx_file.seek(0)
         doc = Document(docx_file)
-        text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-        return text
+        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
     except Exception as e:
         return f"(DOCX read failed: {e})"
 
 
 def read_text_file(txt_file) -> str:
-    """Read a plain text file."""
     try:
         txt_file.seek(0)
         return txt_file.read().decode("utf-8", errors="ignore")
@@ -106,7 +102,6 @@ def read_text_file(txt_file) -> str:
 
 
 def read_abstract_file(abstract_file) -> str:
-    """Auto-detect format and read abstract from uploaded file."""
     if abstract_file is None:
         return ""
     name = abstract_file.name.lower()
@@ -116,18 +111,18 @@ def read_abstract_file(abstract_file) -> str:
         return read_docx(abstract_file)
     elif name.endswith((".txt", ".md")):
         return read_text_file(abstract_file)
-    else:
-        return f"(Unsupported file type: {abstract_file.name})"
+    return f"(Unsupported file type: {abstract_file.name})"
 
 
 def plan_document(profile: dict) -> list:
-    """Decide which sections to include based on project type."""
+    """Decide which sections to include — now with Feasibility Study and Limitations."""
     spine = [
         "Abstract",
         "Introduction",
         "Problem Statement",
         "Objectives",
         "Literature Review",
+        "Feasibility Study",         # NEW
         "Existing System",
         "Proposed System",
         "System Architecture",
@@ -136,6 +131,7 @@ def plan_document(profile: dict) -> list:
         "Non-Functional Requirements",
         "Implementation",
         "Testing",
+        "Limitations",                # NEW (this is the "non-feasibility" / what doesn't work)
         "Conclusion",
         "Future Scope",
         "References",
@@ -143,9 +139,9 @@ def plan_document(profile: dict) -> list:
     project_type = profile.get("project_type", "").lower()
     domain = profile.get("domain", "").lower()
     if "web" in project_type or "mobile" in project_type or "desktop" in project_type:
-        spine.insert(9, "UI Requirements")
+        spine.insert(11, "UI Requirements")
     if "ml" in project_type or "ai" in project_type or "vision" in domain or "ml" in domain:
-        spine.insert(11, "Model Architecture")
+        spine.insert(13, "Model Architecture")
     return spine
 
 
@@ -211,7 +207,23 @@ def run_pipeline(code_file, abstract_text: str, paper_file, settings: dict):
                 st.write("📊 Generating UML diagrams...")
                 diagrams = diagram_generator.generate_diagrams(structure, profile)
                 rendered = sum(1 for d in diagrams if d.get("image_bytes"))
-                st.write(f"   {rendered}/{len(diagrams)} diagrams rendered successfully")
+                
+                # Show detailed status for each diagram
+                for d in diagrams:
+                    if d.get("image_bytes"):
+                        st.write(f"   ✓ {d['name']}: {d.get('status', 'rendered')}")
+                    else:
+                        st.write(f"   ✗ {d['name']}: {d.get('status', 'failed')}")
+                
+                st.write(f"   **Total: {rendered}/{len(diagrams)} diagrams rendered**")
+                
+                if rendered == 0:
+                    st.warning(
+                        "⚠️ No diagrams could be rendered. This usually means kroki.io and "
+                        "plantuml.com are unreachable from your network. "
+                        "The PlantUML source code is still saved in the document."
+                    )
+                
                 st.session_state.diagrams = diagrams
 
             st.write("📄 Assembling DOCX...")
@@ -358,8 +370,12 @@ if st.session_state.generation_complete:
         else:
             for d in st.session_state.diagrams:
                 st.markdown(f"**{d['name']}**")
+                if d.get("status"):
+                    st.caption(f"Status: {d['status']}")
                 if d.get("image_bytes"):
                     st.image(d["image_bytes"])
+                else:
+                    st.warning("Diagram could not be rendered. PlantUML source is below.")
                 with st.expander("PlantUML source"):
                     st.code(d["plantuml"], language="text")
                 st.divider()
