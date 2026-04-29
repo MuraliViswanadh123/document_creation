@@ -1,6 +1,6 @@
 """
 AutoDocs — AI Documentation Synthesizer
-Generates academic reports from source code using Gemini.
+Hybrid architecture: Ollama (local) for bulk work + Gemini for premium sections.
 """
 
 import streamlit as st
@@ -11,7 +11,7 @@ import os
 import re
 from datetime import datetime
 
-from pipeline import gemini_client, parser, diagram_generator, docx_builder
+from pipeline import gemini_client, ollama_client, parser, diagram_generator, docx_builder
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -53,8 +53,57 @@ def get_gemini_api_key():
     return os.environ.get("GEMINI_API_KEY")
 
 
+# ============================================================
+# HYBRID ROUTING — which sections go to which LLM
+# ============================================================
+
+# These "premium" sections benefit from Gemini's stronger prose
+GEMINI_SECTIONS = {
+    "Abstract",       # Most visible, sets tone
+    "Introduction",   # Long, narrative-heavy
+    "Conclusion",     # High-impact closing
+}
+
+# Everything else → Ollama (saves Gemini quota)
+
+
+def route_section(section_name: str, profile: dict, structure: dict, use_gemini: bool, use_ollama: bool) -> dict:
+    """
+    Route a section to the right LLM based on hybrid strategy.
+    Falls back gracefully if one is unavailable.
+    """
+    is_premium = section_name in GEMINI_SECTIONS
+    
+    # Strategy: premium sections use Gemini if available, others use Ollama
+    if is_premium and use_gemini:
+        try:
+            return gemini_client.generate_section(section_name, profile, structure)
+        except Exception as e:
+            st.warning(f"   ⚠️ Gemini failed for {section_name}, trying Ollama: {e}")
+            if use_ollama:
+                return ollama_client.generate_section(section_name, profile, structure)
+            return {"name": section_name, "content": f"_Failed: {e}_", "word_count": 0}
+    
+    if use_ollama:
+        try:
+            return ollama_client.generate_section(section_name, profile, structure)
+        except Exception as e:
+            st.warning(f"   ⚠️ Ollama failed for {section_name}, trying Gemini: {e}")
+            if use_gemini:
+                try:
+                    return gemini_client.generate_section(section_name, profile, structure)
+                except Exception as e2:
+                    return {"name": section_name, "content": f"_Both failed: {e2}_", "word_count": 0}
+            return {"name": section_name, "content": f"_Failed: {e}_", "word_count": 0}
+    
+    # No LLM available
+    return {"name": section_name, "content": "_No LLM available_", "word_count": 0}
+
+
+# ============================================================
+# FILE READING HELPERS
+# ============================================================
 def extract_zip(uploaded_file) -> dict:
-    """Extract uploaded ZIP into in-memory file dict."""
     files = {}
     uploaded_file.seek(0)
     with zipfile.ZipFile(io.BytesIO(uploaded_file.read())) as z:
@@ -115,14 +164,13 @@ def read_abstract_file(abstract_file) -> str:
 
 
 def plan_document(profile: dict) -> list:
-    """Decide which sections to include — now with Feasibility Study and Limitations."""
     spine = [
         "Abstract",
         "Introduction",
         "Problem Statement",
         "Objectives",
         "Literature Review",
-        "Feasibility Study",         # NEW
+        "Feasibility Study",
         "Existing System",
         "Proposed System",
         "System Architecture",
@@ -131,7 +179,7 @@ def plan_document(profile: dict) -> list:
         "Non-Functional Requirements",
         "Implementation",
         "Testing",
-        "Limitations",                # NEW (this is the "non-feasibility" / what doesn't work)
+        "Limitations",
         "Conclusion",
         "Future Scope",
         "References",
@@ -148,12 +196,22 @@ def plan_document(profile: dict) -> list:
 # ============================================================
 # MAIN PIPELINE
 # ============================================================
-def run_pipeline(code_file, abstract_text: str, paper_file, settings: dict):
-    """Orchestrate the full generation pipeline."""
+def run_pipeline(code_file, abstract_text: str, paper_file, settings: dict, use_gemini: bool, use_ollama: bool):
     start_time = time.time()
     
     with st.status("Generating documentation...", expanded=True) as status:
         try:
+            # Show LLM strategy
+            strategy = []
+            if use_ollama:
+                strategy.append("Ollama (local)")
+            if use_gemini:
+                strategy.append("Gemini (cloud)")
+            st.write(f"🤖 LLM strategy: **{' + '.join(strategy)}**")
+            if use_ollama and use_gemini:
+                st.write(f"   Premium sections (Abstract, Introduction, Conclusion) → Gemini")
+                st.write(f"   All other sections → Ollama")
+
             st.write("📂 Extracting source code archive...")
             files = extract_zip(code_file)
             st.write(f"   Found {len(files)} files")
@@ -174,8 +232,15 @@ def run_pipeline(code_file, abstract_text: str, paper_file, settings: dict):
             if abstract_text:
                 st.write(f"📝 Using abstract ({len(abstract_text)} chars)")
 
-            st.write("🧠 Analyzing project (Gemini)...")
-            profile = gemini_client.analyze_project(structure, abstract_text, paper_text)
+            # Project analysis — prefer Ollama to save Gemini quota
+            st.write("🧠 Analyzing project...")
+            if use_ollama:
+                profile = ollama_client.analyze_project(structure, abstract_text, paper_text)
+                st.write("   (via Ollama — saves Gemini quota)")
+            else:
+                profile = gemini_client.analyze_project(structure, abstract_text, paper_text)
+                st.write("   (via Gemini)")
+            
             st.session_state.project_profile = profile
             st.write(f"   Title: **{profile.get('title')}**")
             st.write(f"   Domain: {profile.get('domain')}")
@@ -183,47 +248,46 @@ def run_pipeline(code_file, abstract_text: str, paper_file, settings: dict):
 
             st.write("📋 Planning document structure...")
             section_plan = plan_document(profile)
-            st.write(f"   Will generate {len(section_plan)} sections (targeting 60-70 pages)")
+            st.write(f"   Will generate {len(section_plan)} sections")
 
-            st.write(f"✍️ Generating {len(section_plan)} sections (Gemini)...")
+            # Show projected LLM usage
+            if use_ollama and use_gemini:
+                gemini_count = sum(1 for s in section_plan if s in GEMINI_SECTIONS)
+                ollama_count = len(section_plan) - gemini_count
+                st.write(f"   📊 Routing: {ollama_count} sections → Ollama, {gemini_count} sections → Gemini")
+
+            st.write(f"✍️ Generating {len(section_plan)} sections...")
             progress = st.progress(0, text="Starting...")
             sections = []
             for i, section_name in enumerate(section_plan):
+                llm_label = "Gemini" if (section_name in GEMINI_SECTIONS and use_gemini) else "Ollama"
                 progress.progress(
                     (i + 1) / len(section_plan),
-                    text=f"Writing: {section_name} ({i + 1}/{len(section_plan)})"
+                    text=f"Writing: {section_name} via {llm_label} ({i + 1}/{len(section_plan)})"
                 )
-                try:
-                    section = gemini_client.generate_section(section_name, profile, structure)
-                    sections.append(section)
-                    st.write(f"   ✓ {section_name}: {section['word_count']} words")
-                except Exception as e:
-                    st.warning(f"   ⚠️ {section_name} failed: {e}")
-                    sections.append({"name": section_name, "content": f"_Generation failed: {e}_", "word_count": 0})
+                section = route_section(section_name, profile, structure, use_gemini, use_ollama)
+                sections.append(section)
+                st.write(f"   ✓ {section_name} ({llm_label}): {section['word_count']} words")
+            
             st.session_state.sections = sections
 
+            # Diagrams — always use Ollama for PlantUML (structured DSL, saves Gemini quota)
             diagrams = []
             if settings.get("include_diagrams", True):
-                st.write("📊 Generating UML diagrams...")
-                diagrams = diagram_generator.generate_diagrams(structure, profile)
-                rendered = sum(1 for d in diagrams if d.get("image_bytes"))
+                st.write("📊 Generating UML diagrams (via Ollama)...")
+                # Force Ollama for diagrams in hybrid mode
+                if use_ollama:
+                    diagrams = diagram_generator.generate_diagrams(structure, profile, llm="ollama")
+                elif use_gemini:
+                    diagrams = diagram_generator.generate_diagrams(structure, profile, llm="gemini")
                 
-                # Show detailed status for each diagram
+                rendered = sum(1 for d in diagrams if d.get("image_bytes"))
                 for d in diagrams:
                     if d.get("image_bytes"):
                         st.write(f"   ✓ {d['name']}: {d.get('status', 'rendered')}")
                     else:
                         st.write(f"   ✗ {d['name']}: {d.get('status', 'failed')}")
-                
                 st.write(f"   **Total: {rendered}/{len(diagrams)} diagrams rendered**")
-                
-                if rendered == 0:
-                    st.warning(
-                        "⚠️ No diagrams could be rendered. This usually means kroki.io and "
-                        "plantuml.com are unreachable from your network. "
-                        "The PlantUML source code is still saved in the document."
-                    )
-                
                 st.session_state.diagrams = diagrams
 
             st.write("📄 Assembling DOCX...")
@@ -245,7 +309,7 @@ def run_pipeline(code_file, abstract_text: str, paper_file, settings: dict):
             st.session_state.generation_complete = True
 
             status.update(
-                label=f"✅ Documentation ready in {elapsed:.1f}s — ~{st.session_state.stats['estimated_pages']} pages",
+                label=f"✅ Documentation ready in {elapsed:.0f}s — ~{st.session_state.stats['estimated_pages']} pages",
                 state="complete",
                 expanded=False,
             )
@@ -269,7 +333,7 @@ with st.sidebar:
     
     st.divider()
     st.subheader("📝 Abstract")
-    st.caption("Provide as text OR upload a file (or both — file takes priority)")
+    st.caption("Provide as text OR upload a file (file takes priority)")
     
     abstract_text_input = st.text_area(
         "Type/paste abstract",
@@ -304,20 +368,41 @@ with st.sidebar:
     include_diagrams = st.checkbox("Generate UML diagrams", value=True)
     
     st.divider()
+    st.subheader("🤖 LLM Status")
     
+    # Check both LLMs
     api_key = get_gemini_api_key()
-    if api_key:
-        st.success("✅ Gemini API key configured")
+    gemini_available = bool(api_key)
+    if gemini_available:
         gemini_client.configure(api_key)
+        st.success("✅ Gemini configured")
     else:
         st.error("❌ Gemini API key missing")
-        st.caption("Add to .streamlit/secrets.toml or set GEMINI_API_KEY env var")
     
+    ollama_available = ollama_client.is_available()
+    if ollama_available:
+        st.success("✅ Ollama running locally")
+    else:
+        st.warning("⚠️ Ollama not detected — make sure it's running with qwen2.5-coder:7b")
+    
+    # Determine effective strategy
+    if ollama_available and gemini_available:
+        st.info("🎯 **Hybrid mode** — best of both")
+    elif ollama_available:
+        st.info("🏠 **Ollama-only mode** — fully local")
+    elif gemini_available:
+        st.info("☁️ **Gemini-only mode** — quota-limited")
+    else:
+        st.error("❌ No LLM available!")
+    
+    st.divider()
+    
+    can_generate = code_file is not None and (gemini_available or ollama_available)
     generate_clicked = st.button(
         "🚀 Generate Documentation",
         type="primary",
         use_container_width=True,
-        disabled=(code_file is None or not api_key),
+        disabled=not can_generate,
     )
 
 # ============================================================
@@ -331,10 +416,20 @@ if code_file is None and not st.session_state.generation_complete:
     col1.info("**1. Upload code**\n\nDrop your project ZIP in the sidebar.")
     col2.info("**2. Add abstract**\n\nType it OR upload as .txt/.docx/.pdf (optional).")
     col3.info("**3. Generate**\n\nClick the button. Targets 60-70 pages output.")
+    
+    st.divider()
+    st.subheader("🔧 Architecture")
+    st.markdown("""
+    This tool uses a **hybrid LLM architecture**:
+    - **Ollama (local)**: Handles code analysis, most sections, and diagrams — fast and free, no quota limits
+    - **Gemini (cloud)**: Handles premium sections (Abstract, Introduction, Conclusion) for highest prose quality
+    
+    Result: ~3-4 Gemini API calls per document (vs 25-30 in cloud-only mode), well under free tier limits.
+    """)
 
-elif generate_clicked and code_file is not None and api_key:
+elif generate_clicked and code_file is not None:
     settings = {"include_diagrams": include_diagrams}
-    run_pipeline(code_file, final_abstract, paper_file, settings)
+    run_pipeline(code_file, final_abstract, paper_file, settings, gemini_available, ollama_available)
     st.rerun()
 
 if st.session_state.generation_complete:
@@ -389,4 +484,4 @@ if st.session_state.generation_complete:
         st.rerun()
 
 st.divider()
-st.caption("AutoDocs · Powered by Gemini 2.5 Flash")
+st.caption("AutoDocs · Hybrid Architecture · Ollama + Gemini")
